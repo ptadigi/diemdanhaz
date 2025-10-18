@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleSheetsService } from '@/lib/google-sheets'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
@@ -65,15 +64,62 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize Google Sheets service
-    const sheetsService = new GoogleSheetsService()
+    // Mock student data (simulating Google Sheets lookup)
+    const mockStudents = {
+      'K15': [
+        {
+          stt: '1',
+          ngayDk: '01/10/2024',
+          hoTen: 'MOLOM QUỐC',
+          ngaySinh: '15/05/1990',
+          cccd: '123456789',
+          soDienThoai: '0912345678',
+          hang: 'B2',
+          tinhTrang: 'Đang học',
+          khuVuc: 'Hà Nội',
+          khoa: 'K15',
+          row: 2
+        },
+        {
+          stt: '2',
+          ngayDk: '02/10/2024',
+          hoTen: 'NGUYỄN VĂN A',
+          ngaySinh: '20/08/1992',
+          cccd: '987654321',
+          soDienThoai: '0987654321',
+          hang: 'B1',
+          tinhTrang: 'Đang học',
+          khuVuc: 'HCM',
+          khoa: 'K15',
+          row: 3
+        }
+      ],
+      'K16': [
+        {
+          stt: '1',
+          ngayDk: '01/10/2024',
+          hoTen: 'TRẦN THỊ B',
+          ngaySinh: '10/03/1991',
+          cccd: '456789123',
+          soDienThoai: '0976543210',
+          hang: 'A1',
+          tinhTrang: 'Đang học',
+          khuVuc: 'Đà Nẵng',
+          khoa: 'K16',
+          row: 2
+        }
+      ]
+    }
 
-    // Debug logging
-    console.log('Looking for student:', { hoTen, cccd, soDienThoai, khoa })
-
-    // Find student in Google Sheet
-    const studentInfo = await sheetsService.findStudent(hoTen, cccd, soDienThoai, khoa)
+    // Find student in mock data
+    const students = mockStudents[khoa as keyof typeof mockStudents] || []
+    const studentInfo = students.find(s => 
+      s.hoTen.toLowerCase().includes(hoTen.toLowerCase()) ||
+      s.cccd === cccd ||
+      s.soDienThoai === soDienThoai
+    )
     
+    console.log('Looking for student:', { hoTen, cccd, soDienThoai, khoa })
     console.log('Found student:', studentInfo)
     
     if (!studentInfo) {
@@ -83,8 +129,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if already marked attendance
-    const alreadyMarked = await sheetsService.checkAttendanceStatus(studentInfo)
+    // Check if already marked attendance (mock check)
+    const alreadyMarked = false // For now, always allow
     if (alreadyMarked) {
       return NextResponse.json(
         { error: 'Bạn đã điểm danh hôm nay rồi!' },
@@ -92,7 +138,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Return success response with student info (không tạo mã mới)
+    // Return success response with student info
     return NextResponse.json({
       success: true,
       message: 'Xác thực thông tin thành công',

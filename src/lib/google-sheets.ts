@@ -32,8 +32,17 @@ export class GoogleSheetsService {
   private sheets: any
   private config: GoogleSheetsConfig
 
-  constructor(config: GoogleSheetsConfig) {
-    this.config = config
+  constructor(config?: GoogleSheetsConfig) {
+    if (config) {
+      this.config = config
+    } else {
+      // Default configuration for attendance APIs
+      this.config = {
+        spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID!,
+        serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+        privateKey: (process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')) || ''
+      }
+    }
   }
 
   async initialize() {
@@ -253,6 +262,82 @@ export class GoogleSheetsService {
     } catch (error) {
       console.error(`❌ Failed to mark attendance:`, error)
       throw error
+    }
+  }
+
+  // Methods for attendance API compatibility
+  async findStudent(hoTen: string, cccd: string, soDienThoai: string, khoa: string): Promise<any> {
+    try {
+      console.log(`🔍 Finding student: ${hoTen}, ${cccd}, ${soDienThoai}, ${khoa}`)
+      
+      // Get students from the specified khoa
+      const students = await this.getStudentsByKhoa(khoa)
+      
+      // Find matching student
+      const student = students.find(s => 
+        s.hoTen.toLowerCase().includes(hoTen.toLowerCase()) ||
+        s.cccd === cccd ||
+        s.sdt === soDienThoai
+      )
+      
+      if (student) {
+        return {
+          stt: student.stt,
+          ngayDk: student.ngayDk,
+          hoTen: student.hoTen,
+          ngaySinh: student.ngaySinh,
+          cccd: student.cccd,
+          soDienThoai: student.sdt,
+          hang: student.hang,
+          tinhTrang: student.tt,
+          khuVuc: student.khuVuc,
+          khoa: student.khoa,
+          row: student.rowIndex
+        }
+      }
+      
+      return null
+    } catch (error) {
+      console.error('❌ Error finding student:', error)
+      throw error
+    }
+  }
+
+  async checkAttendanceStatus(studentInfo: any): Promise<boolean> {
+    try {
+      // Get today's date in dd/mm format
+      const today = new Date()
+      const dateStr = today.getDate().toString().padStart(2, '0') + '/' + 
+                    (today.getMonth() + 1).toString().padStart(2, '0')
+      
+      // Find today's column
+      const dateColumn = await this.findDateColumn(studentInfo.khoa, dateStr)
+      
+      if (!dateColumn) {
+        return false // No column for today
+      }
+      
+      // Get the student's row data
+      const data = await this.getSheetData(studentInfo.khoa, `R${studentInfo.row}C${dateColumn}:R${studentInfo.row}C${dateColumn}`)
+      
+      if (data.length > 0 && data[0].length > 0) {
+        const value = data[0][0]
+        return value && value.toString().trim() !== ''
+      }
+      
+      return false
+    } catch (error) {
+      console.error('❌ Error checking attendance status:', error)
+      return false
+    }
+  }
+
+  async getStudents(khoa: string): Promise<any[]> {
+    try {
+      return await this.getStudentsByKhoa(khoa)
+    } catch (error) {
+      console.error('❌ Error getting students:', error)
+      return []
     }
   }
 }

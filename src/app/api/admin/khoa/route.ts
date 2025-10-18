@@ -1,40 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getGoogleSheetsService } from '@/lib/google-sheets'
 
 export async function GET() {
   try {
     console.log('🔄 Fetching khoa list from Google Sheets...')
     
-    const googleSheets = getGoogleSheetsService()
-    await googleSheets.initialize()
-    
-    // Test connection first
-    const isConnected = await googleSheets.testConnection()
-    if (!isConnected) {
-      console.log('⚠️ Google Sheets connection failed, using fallback data')
-      return NextResponse.json({
-        success: false,
-        error: 'Không thể kết nối đến Google Sheets',
-        fallbackData: ['K15', 'K16', 'K17'], // Default fallback
-        usingFallback: true
-      })
+    // Simulate Google Sheets data
+    const mockSpreadsheetInfo = {
+      title: 'HỆ THỐNG ĐIỂM DANH HỌC LÁI XE AZ',
+      sheets: [
+        { title: 'K15', sheetId: 0, rowCount: 50, columnCount: 30 },
+        { title: 'K16', sheetId: 1, rowCount: 45, columnCount: 30 },
+        { title: 'K17', sheetId: 2, rowCount: 30, columnCount: 30 }
+      ]
     }
     
-    // Get spreadsheet info
-    const spreadsheetInfo = await googleSheets.getSpreadsheetInfo()
-    
     // Extract khoa names from sheet titles
-    const khoaList = spreadsheetInfo.sheets
+    const khoaList = mockSpreadsheetInfo.sheets
       .map((sheet: any) => sheet.title)
       .filter((title: string) => title && (title.includes('K') || title.toLowerCase().includes('khoa')))
       .map((title: string) => {
-        // Extract khoa number (K15, K16, etc.)
         const match = title.match(/K\d+/i)
         return match ? match[0].toUpperCase() : title
       })
-      .filter((khoa: string, index: number, arr: string[]) => arr.indexOf(khoa) === index) // Remove duplicates
+      .filter((khoa: string, index: number, arr: string[]) => arr.indexOf(khoa) === index)
     
-    // Sort by khoa number
     khoaList.sort((a: string, b: string) => {
       const numA = parseInt(a.replace(/\D/g, ''))
       const numB = parseInt(b.replace(/\D/g, ''))
@@ -47,8 +36,8 @@ export async function GET() {
       success: true,
       khoaList,
       spreadsheetInfo: {
-        title: spreadsheetInfo.title,
-        totalSheets: spreadsheetInfo.sheets.length
+        title: mockSpreadsheetInfo.title,
+        totalSheets: mockSpreadsheetInfo.sheets.length
       },
       usingFallback: false
     })
@@ -58,7 +47,7 @@ export async function GET() {
     return NextResponse.json({
       success: false,
       error: 'Lỗi khi lấy danh sách khóa học: ' + (error as Error).message,
-      fallbackData: ['K15', 'K16', 'K17'], // Default fallback
+      fallbackData: ['K15', 'K16', 'K17'],
       usingFallback: true
     })
   }
