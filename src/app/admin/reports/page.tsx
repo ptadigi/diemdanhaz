@@ -82,6 +82,11 @@ export default function ReportsPage() {
         if (data.success && data.khoaList.length > 0) {
           setKhoaList(data.khoaList)
           setGoogleSheetsConnected(true)
+          console.log('✅ Using real data from Google Sheets:', data.khoaList)
+        } else if (data.fallbackData) {
+          setKhoaList(data.fallbackData)
+          setGoogleSheetsConnected(false)
+          console.log('⚠️ Using fallback data:', data.fallbackData)
         }
       } else {
         console.log('Using default khoa list')

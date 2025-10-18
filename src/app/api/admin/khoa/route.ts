@@ -3,16 +3,21 @@ import { getGoogleSheetsService } from '@/lib/google-sheets'
 
 export async function GET() {
   try {
+    console.log('🔄 Fetching khoa list from Google Sheets...')
+    
     const googleSheets = getGoogleSheetsService()
     await googleSheets.initialize()
     
     // Test connection first
     const isConnected = await googleSheets.testConnection()
     if (!isConnected) {
-      return NextResponse.json(
-        { error: 'Không thể kết nối đến Google Sheets' },
-        { status: 500 }
-      )
+      console.log('⚠️ Google Sheets connection failed, using fallback data')
+      return NextResponse.json({
+        success: false,
+        error: 'Không thể kết nối đến Google Sheets',
+        fallbackData: ['K15', 'K16', 'K17'], // Default fallback
+        usingFallback: true
+      })
     }
     
     // Get spreadsheet info
@@ -36,20 +41,25 @@ export async function GET() {
       return numA - numB
     })
     
+    console.log(`✅ Found ${khoaList.length} khoa from Google Sheets:`, khoaList)
+    
     return NextResponse.json({
       success: true,
       khoaList,
       spreadsheetInfo: {
         title: spreadsheetInfo.title,
         totalSheets: spreadsheetInfo.sheets.length
-      }
+      },
+      usingFallback: false
     })
     
   } catch (error) {
-    console.error('Error fetching khoa list:', error)
-    return NextResponse.json(
-      { error: 'Lỗi khi lấy danh sách khóa học: ' + (error as Error).message },
-      { status: 500 }
-    )
+    console.error('❌ Error fetching khoa list:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Lỗi khi lấy danh sách khóa học: ' + (error as Error).message,
+      fallbackData: ['K15', 'K16', 'K17'], // Default fallback
+      usingFallback: true
+    })
   }
 }
