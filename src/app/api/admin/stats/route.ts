@@ -1,82 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleSheetsService } from '@/lib/google-sheets'
+import { db } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication
-    const sessionToken = request.cookies.get('admin_session')?.value
-    if (!sessionToken) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    // Get today's date in Vietnam timezone
+    const today = new Date()
+    const vietnamToday = new Date(today.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}))
+    const todayStart = new Date(vietnamToday.getFullYear(), vietnamToday.getMonth(), vietnamToday.getDate())
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
 
-    const sheetsService = new GoogleSheetsService()
-    
-    // Get students from both K15 and K16
-    const k15Students = await sheetsService.getStudents('K15')
-    const k16Students = await sheetsService.getStudents('K16')
-    const totalStudents = k15Students.length + k16Students.length
-    
-    // Get today's column for both classes
-    const k15TodayColumn = await sheetsService.findTodayColumn('K15')
-    const k16TodayColumn = await sheetsService.findTodayColumn('K16')
-    
-    let todayAttendance = 0
-    
-    // Count attendance for K15
-    if (k15TodayColumn) {
-      for (const student of k15Students) {
-        const hasAttended = await sheetsService.checkAttendanceStatusForDate(student, k15TodayColumn.columnIndex)
-        if (hasAttended) todayAttendance++
+    // Get total students from attendance records (unique students)
+    const totalStudentsResult = await db.diemDanhRecord.groupBy({
+      by: ['hoTen', 'khoa'],
+      _count: {
+        id: true
       }
-    }
-    
-    // Count attendance for K16
-    if (k16TodayColumn) {
-      for (const student of k16Students) {
-        const hasAttended = await sheetsService.checkAttendanceStatusForDate(student, k16TodayColumn.columnIndex)
-        if (hasAttended) todayAttendance++
-      }
-    }
+    })
+    const totalStudents = totalStudentsResult.length
 
-    // Check if attendance window is active
-    const now = new Date()
-    const vietnamTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}))
-    const currentMinutes = vietnamTime.getHours() * 60 + vietnamTime.getMinutes()
-    
-    let settings = {
-      startHour: 19,
-      startMinute: 10,
-      endHour: 19,
-      endMinute: 30,
-      isActive: true
-    }
-    
-    try {
-      const settingsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/settings`)
-      if (settingsResponse.ok) {
-        const settingsData = await settingsResponse.json()
-        if (settingsData.success) {
-          settings = settingsData.settings
+    // Get today's attendance
+    const todayAttendances = await db.diemDanhRecord.findMany({
+      where: {
+        diemDanhLuc: {
+          gte: todayStart,
+          lt: todayEnd
+        },
+        isPresent: true
+      }
+    })
+
+    // Get unique students who attended today
+    const uniqueTodayAttendees = new Set(
+      todayAttendances.map(record => `${record.hoTen}-${record.khoa}`)
+    )
+    const todayAttendance = uniqueTodayAttendees.size
+
+    // Check if there's an active session
+    const activeSession = await db.diemDanhSession.findFirst({
+      where: {
+        isActive: true,
+        startTime: {
+          lte: vietnamToday
+        },
+        endTime: {
+          gte: vietnamToday
         }
       }
-    } catch (error) {
-      console.log('Failed to fetch settings, using defaults')
-    }
-    
-    const startMinutes = settings.startHour * 60 + settings.startMinute
-    const endMinutes = settings.endHour * 60 + settings.endMinute
-    const activeSession = settings.isActive && currentMinutes >= startMinutes && currentMinutes <= endMinutes
+    })
+
+    // Get last sync time (most recent attendance record or session creation)
+    const lastAttendance = await db.diemDanhRecord.findFirst({
+      orderBy: {
+        diemDanhLuc: 'desc'
+      }
+    })
+
+    const lastSession = await db.diemDanhSession.findFirst({
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
+
+    const lastSync = lastAttendance?.diemDanhLuc || lastSession?.createdAt || null
 
     return NextResponse.json({
       success: true,
       stats: {
         totalStudents,
         todayAttendance,
-        activeSession,
-        lastSync: new Date().toLocaleTimeString('vi-VN')
+        activeSession: !!activeSession,
+        lastSync: lastSync ? lastSync.toLocaleTimeString('vi-VN') : 'Chưa có'
       }
     })
 

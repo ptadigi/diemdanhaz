@@ -1,76 +1,80 @@
-# 🚗 Hệ Thống Điểm Danh - Học Lái Xe AZ
+# 🎯 HỆ THỐNG ĐIỂM DANH HỌC LÁI XE AZ
 
-Hệ thống điểm danh trực tuyến hiện đại cho học viên Học Lái Xe AZ với giao diện responsive và tính năng thời gian thực.
+Hệ thống điểm danh thông minh cho trung tâm học lái xe AZ với tích hợp Google Sheets API và WebSocket real-time.
 
-## ✨ Features
+## ✨ Tính năng chính
 
-### 🎯 Điểm Danh Thông Minh
-- **Xác thực 2 bước:** Thông tin cá nhân + Mã 6 số
-- **Thời gian thực:** Auto-update trạng thái điểm danh
-- **Multi-tab sync:** Đồng bộ trên tất cả các trình duyệt mở
-- **Validation:** Kiểm tra CCCD, SĐT, thông tin học viên
+### 🎯 Điểm danh thông minh
+- **Điểm danh theo mã**: Học viên nhập mã 6 số để điểm danh
+- **Real-time updates**: Hiển thị thông tin điểm danh real-time qua WebSocket
+- **Tự động đồng bộ**: Đồng bộ dữ liệu với Google Sheets
 
-### ⚙️ Quản Trị Hệ Thống
-- **Cài đặt thời gian:** Bắt đầu - Kết thúc khung giờ điểm danh
-- **Real-time status:** Hiển thị trạng thái hoạt động
-- **Broadcast updates:** Tự động cập nhật cho tất cả users
-- **Local storage:** Cache settings cho offline capability
+### 📊 Quản lý Admin
+- **Dashboard quản lý**: Xem thống kê, quản lý phiên điểm danh
+- **Google Sheets Integration**: Đọc/ghi dữ liệu trực tiếp từ Google Sheets
+- **Multi-khoa hỗ trợ**: Hỗ trợ nhiều khoa (K15, K16, v.v.)
+- **Session management**: Tạo, quản lý phiên điểm danh với thời gian
 
-### 🎨 Giao Diện
-- **Modern UI:** Tailwind CSS + Shadcn/ui components
-- **Responsive:** Tối ưu cho mobile, tablet, desktop
-- **Animations:** Framer Motion effects mượt mà
-- **Color scheme:** Màu xanh đồng bộ, chuyên nghiệp
+### 🔔 Thông báo
+- **Real-time notifications**: Thông báo khi học viên điểm danh
+- **Countdown timer**: Đếm ngược thời gian còn lại của phiên
+- **Status tracking**: Theo dõi trạng thái hoạt động
 
-### 📊 Integration
-- **Google Sheets:** Lưu dữ liệu điểm danh tự động
-- **Webhook notifications:** Gửi thông báo đến external systems
-- **SQLite database:** Prisma ORM với schema tối ưu
+## 🛠 Công nghệ sử dụng
 
-## 🛠 Tech Stack
+### Frontend
+- **Next.js 15** với App Router
+- **TypeScript** cho type safety
+- **Tailwind CSS** cho styling
+- **Shadcn/ui** cho UI components
+- **Socket.io Client** cho real-time communication
+- **Framer Motion** cho animations
+- **Zustand** cho state management
 
-- **Frontend:** Next.js 15, TypeScript, Tailwind CSS
-- **Backend:** Next.js API Routes, Prisma ORM
-- **Database:** SQLite client
-- **UI:** Shadcn/ui, Lucide icons, Framer Motion
-- **Notifications:** Sonner toast, Webhook integration
+### Backend
+- **Next.js API Routes** cho backend
+- **Socket.io** cho WebSocket server
+- **Prisma ORM** với SQLite database
+- **Google Sheets API** cho data integration
+- **JWT Authentication** cho Google Sheets
 
-## 📁 Project Structure
+### Database
+- **SQLite** cho local development
+- **Prisma** cho ORM
+- **Schema design** cho students, sessions, attendance
+
+## 📁 Cấu trúc dự án
 
 ```
-diemdanhaz/
-├── src/
-│   ├── app/
-│   │   ├── api/                 # API endpoints
-│   │   │   ├── attendance/      # Điểm danh APIs
-│   │   │   ├── settings/        # Cài đặt APIs
-│   │   │   └── session/         # Session management
-│   │   ├── page.tsx            # Trang điểm danh chính
-│   │   └── setgio/             # Trang quản trị
-│   ├── components/
-│   │   ├── ui/                 # Shadcn/ui components
-│   │   └── zai-attendance-form.tsx  # Main form component
-│   ├── lib/
-│   │   ├── db.ts               # Database client
-│   │   └── google-sheets.ts    # Sheets integration
-│   └── styles/                 # Global styles
-├── public/
-│   ├── logohoclaixeaz.png      # Logo header
-│   └── icon-192.png           # Favicon
-├── prisma/
-│   └── schema.prisma          # Database schema
-└── package.json               # Dependencies
+src/
+├── app/                    # Next.js App Router
+│   ├── page.tsx           # Trang chính (điểm danh)
+│   ├── admin/             # Admin dashboard
+│   └── api/               # API routes
+├── components/            # React components
+│   ├── ui/               # Shadcn/ui components
+│   ├── AttendanceForm.tsx
+│   ├── AdminDashboard.tsx
+│   └── ...
+├── lib/                   # Utilities và services
+│   ├── db.ts             # Database client
+│   ├── socket.ts         # Socket.io server
+│   ├── google-sheets.ts  # Google Sheets API
+│   └── utils.ts          # Helper functions
+├── hooks/                 # Custom React hooks
+├── stores/               # Zustand stores
+└── types/                # TypeScript types
 ```
 
-## 🚀 Quick Start
+## 🚀 Cài đặt và chạy
 
-### 1. Clone repository
+### 1. Clone dự án
 ```bash
 git clone https://github.com/ptadigi/diemdanhaz.git
 cd diemdanhaz
 ```
 
-### 2. Install dependencies
+### 2. Cài đặt dependencies
 ```bash
 npm install
 ```
@@ -80,103 +84,153 @@ npm install
 npm run db:push
 ```
 
-### 4. Start development server
+### 4. Cấu hình môi trường
+Tạo file `.env.local` với các biến sau:
+```env
+# Google Sheets API
+GOOGLE_SPREADSHEET_ID=your_spreadsheet_id
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account_email
+GOOGLE_PRIVATE_KEY=your_private_key
+
+# NextAuth
+NEXTAUTH_SECRET=your_secret_key
+NEXTAUTH_URL=http://localhost:3000
+```
+
+### 5. Setup Google Sheets API
+1. Tạo Google Cloud Project
+2. Enable Google Sheets API
+3. Tạo Service Account
+4. Download JSON key file
+5. Share spreadsheet với service account email
+
+### 6. Chạy dự án
 ```bash
 npm run dev
 ```
 
-### 5. Open browser
-Navigate to [http://localhost:3000](http://localhost:3000)
+Truy cập `http://localhost:3000` để xem ứng dụng.
 
-## 📱 Usage
+## 📖 Hướng dẫn sử dụng
 
-### 🎓 Học viên (Điểm danh)
+### Đối với học viên
 1. Truy cập trang chủ
-2. Điền thông tin cá nhân (CCCD, Họ tên, SĐT, Khóa)
-3. Nhập mã 6 số được giáo viên công bố
-4. Hoàn tất điểm danh ✅
+2. Nhập mã điểm danh 6 số
+3. Nhấn "Điểm Danh"
+4. Xea thông báo xác nhận
 
-### 👨‍🏫 Giáo viên (Quản trị)
-1. Truy cập `/setgio`
-2. Cài đặt khung giờ điểm danh
-3. Bật/tắt hệ thống
-4. Theo dõi trạng thái real-time
+### Đối với admin
+1. Truy cập `/admin`
+2. Tạo phiên điểm danh mới
+3. Cài đặt thời gian và khoa
+4. Theo dõi điểm danh real-time
+5. Xem thống kê và báo cáo
 
-## 🔧 Configuration
+## 🔧 API Endpoints
 
-### Environment Variables
-```env
-# Google Sheets (optional)
-GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id
-GOOGLE_SHEETS_RANGE=Sheet1!A:Z
+### Public APIs
+- `POST /api/attendance` - Điểm danh học viên
+- `GET /api/session/[id]` - Lấy thông tin phiên
 
-# Webhook (optional)
-WEBHOOK_URL=https://your-webhook-url.com
+### Admin APIs
+- `POST /api/admin/sessions` - Tạo phiên mới
+- `GET /api/admin/sessions` - Lấy danh sách phiên
+- `POST /api/admin/test-connection` - Test Google Sheets connection
+- `POST /api/admin/sync` - Đồng bộ dữ liệu
+
+### WebSocket Events
+- `attendance_update` - Cập nhật điểm danh real-time
+- `session_created` - Phiên mới được tạo
+- `session_ended` - Phiến kết thúc
+
+## 📊 Database Schema
+
+### Student
+```typescript
+interface Student {
+  id: string
+  name: string
+  khoa: string
+  googleSheetRow: number?
+  createdAt: Date
+  updatedAt: Date
+}
 ```
 
-### Database Settings
-- **File:** `./db/attendance.db`
-- **Schema:** Xem `prisma/schema.prisma`
-- **Reset:** `npm run db:push --force-reset`
+### Session
+```typescript
+interface Session {
+  id: string
+  name: string
+  khoa: string
+  startTime: Date
+  endTime: Date
+  attendanceCode: string
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+```
 
-## 🎨 Customization
+### Attendance
+```typescript
+interface Attendance {
+  id: string
+  studentId: string
+  sessionId: string
+  checkedAt: Date
+  syncStatus: 'pending' | 'synced' | 'error'
+  googleSheetRow: number?
+  createdAt: Date
+  updatedAt: Date
+}
+```
 
-### Màu sắc chủ đạo
-- **Primary:** Blue 600 (`#2563eb`)
-- **Secondary:** Cyan 600 (`#0891b2`)
-- **Accent:** Teal 600 (`#0d9488`)
+## 🔄 Luồng hoạt động
 
-### Logo & Branding
-- **Header:** `public/logohoclaixeaz.png`
-- **Favicon:** `public/icon-192.png`
-- **Dimensions:** Height 64px, width auto
+1. **Admin tạo phiên**: Tạo phiên điểm danh với mã và thời gian
+2. **Đồng bộ học viên**: Tự động đọc danh sách từ Google Sheets
+3. **Học viên điểm danh**: Nhập mã và xác nhận điểm danh
+4. **Real-time updates**: Cập nhật trạng thái qua WebSocket
+5. **Đồng bộ Google Sheets**: Ghi dữ liệu điểm danh vào spreadsheet
 
-## 📄 API Documentation
+## 🐛 Troubleshooting
 
-### `/api/attendance/verify`
-- **Method:** POST
-- **Body:** `{ cccd, hoTen, soDienThoai, khoa }`
-- **Response:** Student information validation
+### Common Issues
+1. **Google Sheets API Error**: Kiểm tra service account và permissions
+2. **WebSocket Connection**: Đảm bảo server đang chạy
+3. **Database Error**: Chạy `npm run db:push` để cập nhật schema
 
-### `/api/attendance/confirm`
-- **Method:** POST
-- **Body:** `{ studentInfo, code, formData }`
-- **Response:** Attendance confirmation
-
-### `/api/settings`
-- **GET:** Retrieve current settings
-- **POST:** Update system settings
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
-1. Connect repository to Vercel
-2. Auto-deploy on push to main
-3. Configure environment variables
-
-### Docker
+### Debug Mode
 ```bash
-docker build -t diemdanhaz .
-docker run -p 3000:3000 diemdanhaz
+# Kiểm tra log
+npm run dev
+
+# Kiểm tra database
+npx prisma studio
+
+# Test Google Sheets connection
+curl -X POST http://localhost:3000/api/admin/test-connection
 ```
 
-## 🤝 Contributing
+## 🤝 Đóng góp
 
-1. Fork repository
-2. Create feature branch
+1. Fork dự án
+2. Tạo feature branch
 3. Commit changes
 4. Push to branch
 5. Create Pull Request
 
-## 📝 License
+## 📄 License
 
-This project is proprietary to Học Lái Xe AZ.
+MIT License - xem file [LICENSE](LICENSE) để biết chi tiết.
 
-## 🆘 Support
+## 📞 Liên hệ
 
-- **Email:** support@hoclaixeaz.com
-- **Issues:** [GitHub Issues](https://github.com/ptadigi/diemdanhaz/issues)
+- **Email**: support@hoclaixeaz.vn
+- **Website**: https://hoclaixeaz.vn
+- **GitHub**: https://github.com/ptadigi/diemdanhaz
 
 ---
 
-🚗 **Học Lái Xe AZ - Hệ Thống Điểm Danh Thông Minh**
+⭐ Nếu dự án hữu ích, hãy cho chúng tôi một star!

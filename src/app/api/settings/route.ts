@@ -3,7 +3,16 @@ import { writeFile, mkdir } from 'fs/promises'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
-interface TimeSettings {
+interface SystemSettings {
+  defaultSessionDuration: number
+  autoEndSession: boolean
+  notificationEmail: string
+  syncInterval: number
+  enableNotifications: boolean
+  maintenanceMode: boolean
+  googleSheetsEnabled: boolean
+  backupEnabled: boolean
+  // Legacy time settings
   startHour: number
   startMinute: number
   endHour: number
@@ -11,8 +20,17 @@ interface TimeSettings {
   isActive: boolean
 }
 
-// 默认设置
-const defaultSettings: TimeSettings = {
+// Default settings
+const defaultSettings: SystemSettings = {
+  defaultSessionDuration: 20,
+  autoEndSession: true,
+  notificationEmail: '',
+  syncInterval: 5,
+  enableNotifications: false,
+  maintenanceMode: false,
+  googleSheetsEnabled: true,
+  backupEnabled: true,
+  // Legacy time settings
   startHour: 19,
   startMinute: 10,
   endHour: 19,
@@ -20,13 +38,13 @@ const defaultSettings: TimeSettings = {
   isActive: true
 }
 
-// 内存存储（生产环境建议使用数据库）
-let currentSettings: TimeSettings = { ...defaultSettings }
+// Memory storage (production should use database)
+let currentSettings: SystemSettings = { ...defaultSettings }
 let lastLoadTime = 0
 const CACHE_DURATION = 30000 // 30 seconds cache
 
-// 从文件加载设置（带缓存）
-async function loadSettingsFromFile(): Promise<TimeSettings> {
+// Load settings from file (with cache)
+async function loadSettingsFromFile(): Promise<SystemSettings> {
   const now = Date.now()
   
   // Use cached settings if available and not expired
@@ -48,8 +66,8 @@ async function loadSettingsFromFile(): Promise<TimeSettings> {
   return currentSettings
 }
 
-// 保存设置到文件
-async function saveSettingsToFile(settings: TimeSettings): Promise<void> {
+// Save settings to file
+async function saveSettingsToFile(settings: SystemSettings): Promise<void> {
   try {
     const dataDir = join(process.cwd(), 'data')
     await mkdir(dataDir, { recursive: true })
@@ -92,41 +110,66 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: TimeSettings = await request.json()
+    const body: Partial<SystemSettings> = await request.json()
     
-    // 验证输入
-    if (typeof body.startHour !== 'number' || 
-        typeof body.startMinute !== 'number' ||
-        typeof body.endHour !== 'number' ||
-        typeof body.endMinute !== 'number' ||
-        typeof body.isActive !== 'boolean') {
+    // Validate input
+    if (body.defaultSessionDuration !== undefined && (typeof body.defaultSessionDuration !== 'number' || body.defaultSessionDuration < 5 || body.defaultSessionDuration > 120)) {
       return NextResponse.json(
-        { error: 'Dữ liệu không hợp lệ' },
+        { error: 'Thời lượng phiên không hợp lệ (5-120 phút)' },
         { status: 400 }
       )
     }
 
-    // 验证时间范围
-    if (body.startHour < 0 || body.startHour > 23 ||
-        body.startMinute < 0 || body.startMinute > 59 ||
-        body.endHour < 0 || body.endHour > 23 ||
-        body.endMinute < 0 || body.endMinute > 59) {
+    if (body.syncInterval !== undefined && (typeof body.syncInterval !== 'number' || body.syncInterval < 1 || body.syncInterval > 60)) {
       return NextResponse.json(
-        { error: 'Thời gian không hợp lệ' },
+        { error: 'Chu kỳ đồng bộ không hợp lệ (1-60 phút)' },
         { status: 400 }
       )
     }
 
-    // 更新设置
+    if (body.notificationEmail !== undefined && typeof body.notificationEmail !== 'string') {
+      return NextResponse.json(
+        { error: 'Email thông báo không hợp lệ' },
+        { status: 400 }
+      )
+    }
+
+    // Validate time settings if provided
+    if (body.startHour !== undefined && (body.startHour < 0 || body.startHour > 23)) {
+      return NextResponse.json(
+        { error: 'Giờ bắt đầu không hợp lệ' },
+        { status: 400 }
+      )
+    }
+
+    if (body.startMinute !== undefined && (body.startMinute < 0 || body.startMinute > 59)) {
+      return NextResponse.json(
+        { error: 'Phút bắt đầu không hợp lệ' },
+        { status: 400 }
+      )
+    }
+
+    if (body.endHour !== undefined && (body.endHour < 0 || body.endHour > 23)) {
+      return NextResponse.json(
+        { error: 'Giờ kết thúc không hợp lệ' },
+        { status: 400 }
+      )
+    }
+
+    if (body.endMinute !== undefined && (body.endMinute < 0 || body.endMinute > 59)) {
+      return NextResponse.json(
+        { error: 'Phút kết thúc không hợp lệ' },
+        { status: 400 }
+      )
+    }
+
+    // Update settings
     currentSettings = {
-      startHour: body.startHour,
-      startMinute: body.startMinute,
-      endHour: body.endHour,
-      endMinute: body.endMinute,
-      isActive: body.isActive
+      ...currentSettings,
+      ...body
     }
 
-    // 保存到文件
+    // Save to file
     await saveSettingsToFile(currentSettings)
 
     return NextResponse.json({

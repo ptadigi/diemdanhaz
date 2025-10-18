@@ -35,9 +35,13 @@ model DiemDanhSession {
   id          String   @id @default(cuid())
   sessionCode String   @unique
   title       String?
+  khoa        String?  // Thêm trường khoa
   startTime   DateTime
   endTime     DateTime
   isActive    Boolean  @default(true)
+  spreadsheetId String? // Google Sheets ID
+  syncStatus  String   @default("pending") // pending, syncing, synced, error
+  lastSyncAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -58,7 +62,9 @@ model DiemDanhRecord {
   ghiChu       String?
   isPresent    Boolean  @default(true)
   diemDanhLuc  DateTime @default(now())
-  googleSheetRow String?
+  googleSheetRow Int?   // Thay đổi từ String thành Int
+  syncStatus   String   @default("pending") // pending, synced, error
+  lastSyncAt   DateTime?
   
   // Relations
   session DiemDanhSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

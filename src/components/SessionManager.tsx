@@ -19,6 +19,7 @@ import {
   Square
 } from 'lucide-react'
 import { toast } from 'sonner'
+import GoogleSheetsSync from './GoogleSheetsSync'
 
 interface Session {
   id: string
@@ -104,6 +105,7 @@ export default function SessionManager() {
         },
         body: JSON.stringify({
           title: `Phiên điểm danh ${dateStr}`,
+          khoa: 'K15', // Mặc định là K15, có thể thay đổi sau
           duration: 20
         }),
       })
@@ -112,7 +114,8 @@ export default function SessionManager() {
       
       if (data.success) {
         toast.success('Tạo phiên điểm danh thành công!')
-        fetchSessions()
+        // Tải lại danh sách phiên để cập nhật ngay lập tức
+        await fetchSessions()
       } else {
         toast.error(data.error || 'Tạo phiên thất bại')
       }
@@ -203,44 +206,52 @@ export default function SessionManager() {
                 key={session.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-lg p-4 border border-green-200"
+                className="space-y-4"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <Badge className="bg-green-600 text-white">
-                      ĐANG MỞ
-                    </Badge>
-                    <div>
-                      <h4 className="font-semibold">{session.title}</h4>
-                      <p className="text-sm text-gray-600">
-                        Kết thúc: {formatTime(session.endTime)}
-                      </p>
-                      <p className="text-xs text-amber-600 mt-1">
-                        ✅ Đây là phiên hoạt động duy nhất tại thời điểm này
-                      </p>
+                <div className="bg-white rounded-lg p-4 border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Badge className="bg-green-600 text-white">
+                        ĐANG MỞ
+                      </Badge>
+                      <div>
+                        <h4 className="font-semibold">{session.title}</h4>
+                        <p className="text-sm text-gray-600">
+                          Kết thúc: {formatTime(session.endTime)}
+                        </p>
+                        <p className="text-xs text-amber-600 mt-1">
+                          ✅ Đây là phiên hoạt động duy nhất tại thời điểm này
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-green-600">{session.presentCount}</p>
-                      <p className="text-xs text-gray-600">Đã điểm danh</p>
-                    </div>
-                    <div className="flex items-center gap-2 bg-blue-100 px-3 py-2 rounded-lg">
-                      <span className="text-sm font-medium">Mã:</span>
-                      <code className="bg-white px-2 py-1 rounded text-sm font-mono font-bold text-blue-600">
-                        {session.sessionCode}
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => copySessionCode(session.sessionCode)}
-                        className="h-6 w-6 p-0"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </Button>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-green-600">{session.presentCount}</p>
+                        <p className="text-xs text-gray-600">Đã điểm danh</p>
+                      </div>
+                      <div className="flex items-center gap-2 bg-blue-100 px-3 py-2 rounded-lg">
+                        <span className="text-sm font-medium">Mã:</span>
+                        <code className="bg-white px-2 py-1 rounded text-sm font-mono font-bold text-blue-600">
+                          {session.sessionCode}
+                        </code>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copySessionCode(session.sessionCode)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
+                
+                {/* Thêm Google Sheets Sync cho phiên đang hoạt động */}
+                <GoogleSheetsSync 
+                  sessionId={session.id} 
+                  sessionTitle={session.title}
+                />
               </motion.div>
             ))}
           </CardContent>

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { ZAI } from 'z-ai-web-dev-sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const { title, duration = 20 } = await request.json()
+    const { title, khoa, duration = 20 } = await request.json()
+    
+    if (!title || !khoa) {
+      return NextResponse.json(
+        { error: 'Vui lòng nhập tiêu đề và khóa học' },
+        { status: 400 }
+      )
+    }
     
     // Tự động tạo title nếu không có
     const sessionTitle = title || `Phiên điểm danh ${new Date().toLocaleDateString('vi-VN', { 
@@ -16,20 +22,20 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const endTime = new Date(now.getTime() + duration * 60 * 1000)
 
-    // ĐẶT QUAN TRỌNG: Đóng tất cả các phiên đang hoạt động trước đó
+    // Đóng tất cả các phiên đang hoạt động trước đó
     try {
       await db.diemDanhSession.updateMany({
         where: {
           isActive: true
         },
         data: {
-          isActive: false
+          isActive: false,
+          endTime: now
         }
       })
       console.log('✅ Đã đóng tất cả các phiên đang hoạt động trước đó')
     } catch (updateError) {
       console.error('Lỗi khi đóng các phiên cũ:', updateError)
-      // Vẫn tiếp tục tạo phiên mới ngay cả khi không đóng được phiên cũ
     }
 
     // Create session in database
@@ -37,9 +43,12 @@ export async function POST(request: NextRequest) {
       data: {
         sessionCode: Math.floor(100000 + Math.random() * 900000).toString(),
         title: sessionTitle,
+        khoa: khoa, // Lưu trường khoa
         startTime: now,
         endTime,
-        isActive: true
+        isActive: true,
+        spreadsheetId: '1AKhYZrbgo7tq5ZrexHBeXJO_8hry8tWa1hJWWlu40JM',
+        syncStatus: 'pending'
       }
     })
 
@@ -47,8 +56,9 @@ export async function POST(request: NextRequest) {
     try {
       const webhookData = {
         action: 'session_created',
-        sessionCode,
+        sessionCode: session.sessionCode,
         title: sessionTitle,
+        khoa: khoa,
         startTime: now.toLocaleString('vi-VN'),
         endTime: endTime.toLocaleString('vi-VN'),
         duration: `${duration} phút`,
@@ -57,7 +67,6 @@ export async function POST(request: NextRequest) {
         spreadsheetId: '1AKhYZrbgo7tq5ZrexHBeXJO_8hry8tWa1hJWWlu40JM'
       }
 
-      // Gửi webhook thông báo phiên mới
       await fetch('https://n8n.phamthanh.net/webhook/diemdanh', {
         method: 'POST',
         headers: {
@@ -65,6 +74,30 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify(webhookData),
       })
+      
+      // Auto-sync from Google Sheets after creating session
+      console.log('🔄 Auto-syncing from Google Sheets...')
+      try {
+        const syncResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId: session.id,
+            direction: 'from-google-sheets'
+          }),
+        })
+        
+        const syncResult = await syncResponse.json()
+        if (syncResult.success) {
+          console.log(`✅ Auto-synced ${syncResult.syncedCount} records from Google Sheets`)
+        } else {
+          console.error('❌ Auto-sync failed:', syncResult.error)
+        }
+      } catch (syncError) {
+        console.error('❌ Auto-sync error:', syncError)
+      }
       
     } catch (webhookError) {
       console.error('Webhook error:', webhookError)
@@ -74,11 +107,15 @@ export async function POST(request: NextRequest) {
       success: true,
       session: {
         id: session.id,
-        sessionCode: session.sessionCode,
         title: session.title,
-        startTime: session.startTime,
-        endTime: session.endTime,
-        isActive: session.isActive
+        khoa: khoa,
+        startTime: session.startTime.toISOString(),
+        endTime: session.endTime.toISOString(),
+        date: session.startTime.toLocaleDateString('vi-VN'),
+        isActive: session.isActive,
+        attendanceCode: session.sessionCode,
+        totalStudents: 0, // Will be updated when students attend
+        attendedCount: 0
       }
     })
 
@@ -143,13 +180,33 @@ export async function GET() {
       })
     }
 
+    // Transform data to match frontend expectations
+    const transformedSessions = sessions.map(session => {
+      // Get unique khoa from attendance records for this session, or use session.khoa
+      const uniqueKhoas = [...new Set(session.attendanceRecords.map(r => r.khoa).filter(Boolean))]
+      const primaryKhoa = session.khoa || (uniqueKhoas.length > 0 ? uniqueKhoas[0] : 'Chưa xác định')
+      
+      return {
+        id: session.id,
+        sessionCode: session.sessionCode, // Thêm sessionCode
+        title: session.title,
+        khoa: primaryKhoa,
+        startTime: session.startTime.toISOString(), // Đổi sang ISO string
+        endTime: session.endTime.toISOString(),   // Đổi sang ISO string
+        date: session.startTime.toLocaleDateString('vi-VN'),
+        isActive: session.isActive,
+        attendanceCode: session.sessionCode,
+        attendanceCount: session.attendanceRecords.length, // Thêm attendanceCount
+        presentCount: session.attendanceRecords.filter(r => r.isPresent).length,
+        totalStudents: session.attendanceRecords.length, // Giữ lại để tương thích
+        attendedCount: session.attendanceRecords.filter(r => r.isPresent).length, // Giữ lại để tương thích
+        attendanceRecords: session.attendanceRecords
+      }
+    })
+
     return NextResponse.json({
       success: true,
-      sessions: sessions.map(session => ({
-        ...session,
-        attendanceCount: session.attendanceRecords.length,
-        presentCount: session.attendanceRecords.filter(r => r.isPresent).length
-      }))
+      sessions: transformedSessions
     })
 
   } catch (error) {
