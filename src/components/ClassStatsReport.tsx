@@ -32,6 +32,8 @@ interface ClassStat {
   present: number
   absent: number
   students: Student[]
+  dateColumn?: string
+  message?: string // Thêm message cho các lớp chưa có dữ liệu
 }
 
 interface StatsData {
@@ -68,12 +70,15 @@ export default function ClassStatsReport({ sessionId, date }: ClassStatsReportPr
       const params = new URLSearchParams()
       if (sessionId) params.append('sessionId', sessionId)
       if (selectedDate) params.append('date', selectedDate)
+      // Add timestamp to prevent caching
+      params.append('_t', Date.now().toString())
       
       const response = await fetch(`/api/admin/stats-fixed?${params.toString()}`)
       const data = await response.json()
       
       if (data.success) {
         setStatsData(data.data)
+        toast.success('Đã cập nhật dữ liệu thống kê mới nhất')
       } else {
         toast.error(data.error || 'Không thể tải thống kê')
       }
@@ -205,6 +210,7 @@ export default function ClassStatsReport({ sessionId, date }: ClassStatsReportPr
               {statsData.classStats.map((classStat) => {
                 const attendanceRate = getAttendanceRate(classStat.present, classStat.total)
                 const isExpanded = expandedClasses.has(classStat.className)
+                const hasNoData = classStat.total === 0 && classStat.message
                 
                 return (
                   <motion.div
@@ -214,42 +220,58 @@ export default function ClassStatsReport({ sessionId, date }: ClassStatsReportPr
                     className="border rounded-lg overflow-hidden"
                   >
                     <div 
-                      className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-                      onClick={() => toggleClassExpansion(classStat.className)}
+                      className={`p-4 cursor-pointer transition-colors ${
+                        hasNoData ? 'bg-gray-100 hover:bg-gray-200' : 'bg-gray-50 hover:bg-gray-100'
+                      }`}
+                      onClick={() => !hasNoData && toggleClassExpansion(classStat.className)}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <h4 className="font-semibold text-lg">Khóa {classStat.className}</h4>
-                          <Badge className={getAttendanceRateColor(attendanceRate)}>
-                            {attendanceRate}% có mặt
-                          </Badge>
+                          {hasNoData ? (
+                            <Badge variant="secondary" className="bg-gray-200 text-gray-600">
+                              Chưa có dữ liệu
+                            </Badge>
+                          ) : (
+                            <Badge className={getAttendanceRateColor(attendanceRate)}>
+                              {attendanceRate}% có mặt
+                            </Badge>
+                          )}
                         </div>
                         
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-6 text-sm">
-                            <div className="flex items-center gap-1">
-                              <UserCheck className="w-4 h-4 text-green-600" />
-                              <span className="font-medium text-green-600">{classStat.present}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <UserX className="w-4 h-4 text-red-600" />
-                              <span className="font-medium text-red-600">{classStat.absent}</span>
-                            </div>
-                            <span className="text-gray-600">/ {classStat.total}</span>
+                            {hasNoData ? (
+                              <span className="text-gray-500 italic">{classStat.message}</span>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-1">
+                                  <UserCheck className="w-4 h-4 text-green-600" />
+                                  <span className="font-medium text-green-600">{classStat.present}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <UserX className="w-4 h-4 text-red-600" />
+                                  <span className="font-medium text-red-600">{classStat.absent}</span>
+                                </div>
+                                <span className="text-gray-600">/ {classStat.total}</span>
+                              </>
+                            )}
                           </div>
                           
-                          <Button variant="ghost" size="sm">
-                            {isExpanded ? (
-                              <ChevronUp className="w-4 h-4" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4" />
-                            )}
-                          </Button>
+                          {!hasNoData && (
+                            <Button variant="ghost" size="sm">
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
                     
-                    {isExpanded && (
+                    {!hasNoData && isExpanded && (
                       <motion.div
                         initial={{ height: 0 }}
                         animate={{ height: 'auto' }}

@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
     // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString()
 
-    // Mark attendance on Google Sheet
-    const markResult = await sheetsService.markAttendance(studentInfo, code)
+    // Mark attendance on Google Sheet using direct API
+    const markResult = await sheetsService.markAttendanceDirectAuto(studentInfo)
     
     if (!markResult.success) {
       return NextResponse.json(
@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    console.log('✅ Direct Google Sheets update successful:', markResult.message)
 
     // Prepare webhook data with detailed information for n8n to process
     const webhookData = {
@@ -139,14 +141,15 @@ export async function POST(request: NextRequest) {
     // Return success response
     return NextResponse.json({
       success: true,
-      message: `Điểm danh thành công! Đã đánh dấu trên Google Sheet cho ${studentInfo.hoTen}`,
+      message: `Điểm danh thành công! Đã ghi trực tiếp vào Google Sheet cho ${studentInfo.hoTen}`,
       code: code,
       data: {
         hoTen: studentInfo.hoTen,
         khoa: khoa,
         thoiGian: now.toLocaleString('vi-VN'),
         sheetRow: studentInfo.row,
-        googleSheetsMarked: true
+        googleSheetsMarked: true,
+        directUpdate: true
       }
     })
 

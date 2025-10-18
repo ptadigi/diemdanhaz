@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       const response = NextResponse.json({
         success: true,
         message: 'Đăng nhập thành công',
-        redirect: '/setgio'
+        redirect: '/admin/dashboard'
       });
 
       response.cookies.set('admin_session', sessionToken, {

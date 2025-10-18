@@ -1,113 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ZAI } from 'z-ai-web-dev-sdk'
+import { GoogleSheetsService } from '@/lib/google-sheets'
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const sessionId = searchParams.get('sessionId')
-    const date = searchParams.get('date')
-
-    try {
-      const zai = await ZAI.create()
-      
-      // Fetch data from Google Sheets
-      const reportData = await zai.functions.invoke('google_sheets_fetch', {
-        spreadsheetId: '1AKhYZrbgo7tq5ZrexHBeXJO_8hry8tWa1hJWWlu40JM',
-        range: sessionId ? `Session_${sessionId}` : 'DiemDanh',
-        filters: date ? { date } : {}
-      })
-
-      // Process data to group by class (Khóa)
-      const classStats = new Map()
-      let totalStudents = 0
-      let totalPresent = 0
-
-      // Check if reportData has rows
-      if (!reportData.rows || reportData.rows.length === 0) {
-        return NextResponse.json({
-          success: true,
-          data: {
-            summary: {
-              totalStudents: 0,
-              totalPresent: 0,
-              totalAbsent: 0,
-              totalClasses: 0,
-              date: date || new Date().toLocaleDateString('vi-VN')
-            },
-            classStats: [],
-            sessionId,
-            fetchedAt: new Date().toISOString()
-          }
-        })
-      }
-
-      reportData.rows.forEach((row: string[]) => {
-        const className = row[4] || 'Unknown' // Khóa is at index 4
-        const status = row[7] || '' // Status is at index 7
-        
-        if (!classStats.has(className)) {
-          classStats.set(className, {
-            className,
-            total: 0,
-            present: 0,
-            absent: 0,
-            students: []
-          })
-        }
-
-        const stats = classStats.get(className)
-        const studentName = row[1] || ''
-        const attendanceTime = row[6] || ''
-        
-        stats.total++
-        totalStudents++
-        
-        if (status.includes('Đã điểm danh') || status.includes('Present')) {
-          stats.present++
-          totalPresent++
-          stats.students.push({
-            name: studentName,
-            time: attendanceTime,
-            status: 'present'
-          })
-        } else {
-          stats.absent++
-          stats.students.push({
-            name: studentName,
-            time: '',
-            status: 'absent'
-          })
-        }
-      })
-
-      const classStatsArray = Array.from(classStats.values()).sort((a, b) => 
-        a.className.localeCompare(b.className)
-      )
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          summary: {
-            totalStudents,
-            totalPresent,
-            totalAbsent: totalStudents - totalPresent,
-            totalClasses: classStatsArray.length,
-            date: date || new Date().toLocaleDateString('vi-VN')
-          },
-          classStats: classStatsArray,
-          sessionId,
-          fetchedAt: new Date().toISOString()
-        }
-      })
-
-    } catch (zaiError) {
-      console.error('ZAI fetch error:', zaiError)
-      
+    // Check authentication
+    const sessionToken = request.cookies.get('admin_session')?.value
+    if (!sessionToken) {
       return NextResponse.json(
-        { error: 'Không thể kết nối đến Google Sheets để lấy dữ liệu thống kê' },
-        { status: 500 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       )
     }
+
+    const sheetsService = new GoogleSheetsService()
+    
+    // Get students from both K15 and K16
+    const k15Students = await sheetsService.getStudents('K15')
+    const k16Students = await sheetsService.getStudents('K16')
+    const totalStudents = k15Students.length + k16Students.length
+    
+    // Get today's column for both classes
+    const k15TodayColumn = await sheetsService.findTodayColumn('K15')
+    const k16TodayColumn = await sheetsService.findTodayColumn('K16')
+    
+    let todayAttendance = 0
+    
+    // Count attendance for K15
+    if (k15TodayColumn) {
+      for (const student of k15Students) {
+        const hasAttended = await sheetsService.checkAttendanceStatusForDate(student, k15TodayColumn.columnIndex)
+        if (hasAttended) todayAttendance++
+      }
+    }
+    
+    // Count attendance for K16
+    if (k16TodayColumn) {
+      for (const student of k16Students) {
+        const hasAttended = await sheetsService.checkAttendanceStatusForDate(student, k16TodayColumn.columnIndex)
+        if (hasAttended) todayAttendance++
+      }
+    }
+
+    // Check if attendance window is active
+    const now = new Date()
+    const vietnamTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}))
+    const currentMinutes = vietnamTime.getHours() * 60 + vietnamTime.getMinutes()
+    
+    let settings = {
+      startHour: 19,
+      startMinute: 10,
+      endHour: 19,
+      endMinute: 30,
+      isActive: true
+    }
+    
+    try {
+      const settingsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/settings`)
+      if (settingsResponse.ok) {
+        const settingsData = await settingsResponse.json()
+        if (settingsData.success) {
+          settings = settingsData.settings
+        }
+      }
+    } catch (error) {
+      console.log('Failed to fetch settings, using defaults')
+    }
+    
+    const startMinutes = settings.startHour * 60 + settings.startMinute
+    const endMinutes = settings.endHour * 60 + settings.endMinute
+    const activeSession = settings.isActive && currentMinutes >= startMinutes && currentMinutes <= endMinutes
+
+    return NextResponse.json({
+      success: true,
+      stats: {
+        totalStudents,
+        todayAttendance,
+        activeSession,
+        lastSync: new Date().toLocaleTimeString('vi-VN')
+      }
+    })
 
   } catch (error) {
     console.error('Get stats error:', error)

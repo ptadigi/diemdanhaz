@@ -1,3 +1,6 @@
+import { GoogleAuth, JWT } from 'google-auth-library'
+import { google, sheets_v4 } from 'googleapis'
+
 interface StudentInfo {
   row: number
   stt: string
@@ -21,10 +24,48 @@ interface AttendanceResult {
 
 export class GoogleSheetsService {
   private spreadsheetId: string
+  private sheets: sheets_v4.Sheets | null = null
 
   constructor() {
     // Sử dụng spreadsheet ID từ environment
     this.spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || '1AKhYZrbgo7tq5ZrexHBeXJO_8hry8tWa1hJWWlu40JM'
+  }
+
+  /**
+   * Khởi tạo Google Sheets API client với Service Account
+   */
+  private async initializeSheets(): Promise<sheets_v4.Sheets> {
+    if (this.sheets) {
+      return this.sheets
+    }
+
+    try {
+      const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
+      const privateKey = process.env.GOOGLE_PRIVATE_KEY
+
+      if (!serviceAccountEmail || !privateKey) {
+        throw new Error('Missing Google Service Account credentials')
+      }
+
+      // Tạo JWT client
+      const auth = new GoogleAuth({
+        credentials: {
+          client_email: serviceAccountEmail,
+          private_key: privateKey.replace(/\\n/g, '\n')
+        },
+        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      })
+
+      const authClient = await auth.getClient()
+      
+      this.sheets = google.sheets({ version: 'v4', auth: authClient as any })
+      
+      console.log('✅ Google Sheets API initialized successfully')
+      return this.sheets
+    } catch (error) {
+      console.error('❌ Error initializing Google Sheets API:', error)
+      throw error
+    }
   }
 
   /**
@@ -35,7 +76,14 @@ export class GoogleSheetsService {
       // Sử dụng CSV export endpoint cho sheet công khai
       const csvUrl = `https://docs.google.com/spreadsheets/d/${this.spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`
       
-      const response = await fetch(csvUrl)
+      const response = await fetch(csvUrl, {
+        cache: 'no-store', // Prevent browser caching
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      })
       if (!response.ok) {
         throw new Error(`Failed to fetch sheet data: ${response.statusText}`)
       }
@@ -222,7 +270,7 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Cập nhật điểm danh qua webhook đến Google Sheets
+   * Cập nhật điểm danh qua webhook đến Google Sheets với fallback
    */
   async updateAttendance(data: {
     hoTen: string;
@@ -232,19 +280,49 @@ export class GoogleSheetsService {
     daDiemDanh: boolean;
   }): Promise<{ success: boolean; message: string }> {
     try {
+      console.log('🔄 Updating attendance for:', data.hoTen, 'Class:', data.khoa)
+      
+      // 1. Thử tìm thông tin học viên trước
+      const studentInfo = await this.findStudent(data.hoTen, data.cccd, data.soDienThoai, data.khoa)
+      
+      if (!studentInfo) {
+        throw new Error('Không tìm thấy thông tin học viên trong Google Sheets')
+      }
+      
+      console.log('✅ Found student:', studentInfo.hoTen, 'Row:', studentInfo.row)
+      
+      // 2. Tìm cột ngày hôm nay
+      const todayColumn = await this.findTodayColumn(data.khoa)
+      
+      if (!todayColumn) {
+        throw new Error('Không tìm thấy cột ngày hôm nay trong Google Sheets')
+      }
+      
+      console.log('✅ Found today column:', todayColumn.dateHeader, 'Index:', todayColumn.columnIndex)
+      
+      // 3. Gửi webhook đến n8n để cập nhật
       const webhookUrl = process.env.WEBHOOK_URL || 'https://n8n.phamthanh.net/webhook/diemdanh';
       
-      // Gửi data đến webhook n8n để cập nhật Google Sheets
+      const webhookData = {
+        action: 'update_attendance',
+        timestamp: new Date().toISOString(),
+        data: {
+          ...data,
+          studentInfo: studentInfo,
+          columnIndex: todayColumn.columnIndex,
+          dateHeader: todayColumn.dateHeader,
+          directUpdate: true
+        }
+      }
+      
+      console.log('📤 Sending webhook with data:', webhookData)
+      
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action: 'update_attendance',
-          timestamp: new Date().toISOString(),
-          data: data
-        })
+        body: JSON.stringify(webhookData)
       });
 
       if (!response.ok) {
@@ -252,14 +330,15 @@ export class GoogleSheetsService {
       }
 
       const result = await response.json();
-      console.log('Webhook response:', result);
+      console.log('✅ Webhook response:', result);
       
       return {
         success: true,
-        message: `Đã cập nhật điểm danh cho ${data.hoTen} thành công`
+        message: `Đã gửi yêu cầu cập nhật điểm danh cho ${data.hoTen} (${studentInfo.row}, ${todayColumn.dateHeader})`
       };
+      
     } catch (error) {
-      console.error('Error updating attendance via webhook:', error);
+      console.error('❌ Error updating attendance via webhook:', error);
       return {
         success: false,
         message: 'Lỗi khi cập nhật điểm danh: ' + (error as Error).message
@@ -317,6 +396,149 @@ export class GoogleSheetsService {
     } catch (error) {
       console.error('Error checking attendance status for date:', error)
       return false
+    }
+  }
+
+  /**
+   * Ghi trực tiếp điểm danh vào Google Sheets sử dụng Google Sheets API
+   */
+  async markAttendanceDirect(studentInfo: StudentInfo, dateColumn: { columnIndex: number; dateHeader: string }): Promise<AttendanceResult> {
+    try {
+      console.log('🔄 Starting direct Google Sheets update for:', studentInfo.hoTen)
+      
+      // 1. Khởi tạo Google Sheets API
+      const sheets = await this.initializeSheets()
+      
+      // 2. Xác định sheet name
+      const sheetName = studentInfo.khoa === 'K15' ? 'K15' : 'K16'
+      
+      // 3. Tính toán range (A1 notation)
+      const columnLetter = this.columnNumberToLetter(dateColumn.columnIndex)
+      const range = `${sheetName}!${columnLetter}${studentInfo.row}`
+      
+      console.log(`📍 Target range: ${range} (Student: ${studentInfo.hoTen}, Date: ${dateColumn.dateHeader})`)
+      
+      // 4. Ghi giá trị TRUE vào ô
+      const response = await sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: range,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [['TRUE']]
+        }
+      })
+
+      console.log('✅ Google Sheets update response:', response.data)
+      
+      // 5. Verify the update
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second for Google Sheets to process
+      
+      const verifyResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: range
+      })
+      
+      const updatedValue = verifyResponse.data.values?.[0]?.[0] || ''
+      console.log('🔍 Verification - Updated value:', updatedValue)
+      
+      if (updatedValue.toUpperCase() === 'TRUE') {
+        return {
+          success: true,
+          message: `✅ Đã đánh dấu điểm danh thành công cho ${studentInfo.hoTen} tại ${range}`,
+          studentInfo: studentInfo,
+          code: 'SUCCESS'
+        }
+      } else {
+        throw new Error(`Verification failed. Expected TRUE, got ${updatedValue}`)
+      }
+      
+    } catch (error) {
+      console.error('❌ Error marking attendance directly:', error)
+      return {
+        success: false,
+        message: `Lỗi khi ghi điểm danh trực tiếp: ${(error as Error).message}`,
+        studentInfo: studentInfo,
+        code: 'ERROR'
+      }
+    }
+  }
+
+  /**
+   * Ghi trực tiếp điểm danh với auto-find today column
+   */
+  async markAttendanceDirectAuto(studentInfo: StudentInfo): Promise<AttendanceResult> {
+    try {
+      // 1. Tìm cột ngày hôm nay
+      const todayColumn = await this.findTodayColumn(studentInfo.khoa)
+      
+      if (!todayColumn) {
+        return {
+          success: false,
+          message: 'Không tìm thấy cột ngày hôm nay',
+          studentInfo: studentInfo,
+          code: 'NO_COLUMN'
+        }
+      }
+      
+      console.log(`📅 Found today column: ${todayColumn.dateHeader} (Index: ${todayColumn.columnIndex})`)
+      
+      // 2. Gọi method markAttendanceDirect
+      return await this.markAttendanceDirect(studentInfo, todayColumn)
+      
+    } catch (error) {
+      console.error('❌ Error in auto mark attendance:', error)
+      return {
+        success: false,
+        message: `Lỗi khi tự động đánh dấu điểm danh: ${(error as Error).message}`,
+        studentInfo: studentInfo,
+        code: 'ERROR'
+      }
+    }
+  }
+
+  /**
+   * Chuyển đổi số cột thành chữ cái (1 -> A, 2 -> B, etc.)
+   */
+  private columnNumberToLetter(columnNumber: number): string {
+    let result = ''
+    while (columnNumber > 0) {
+      columnNumber--
+      result = String.fromCharCode(65 + (columnNumber % 26)) + result
+      columnNumber = Math.floor(columnNumber / 26)
+    }
+    return result
+  }
+
+  /**
+   * Test kết nối Google Sheets API
+   */
+  async testConnection(): Promise<{ success: boolean; message: string; spreadsheetInfo?: any }> {
+    try {
+      const sheets = await this.initializeSheets()
+      
+      // Lấy thông tin spreadsheet
+      const response = await sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId
+      })
+      
+      const spreadsheetInfo = {
+        title: response.data.properties?.title,
+        sheets: response.data.sheets?.map(sheet => ({
+          name: sheet.properties?.title,
+          sheetId: sheet.properties?.sheetId
+        }))
+      }
+      
+      return {
+        success: true,
+        message: '✅ Kết nối Google Sheets API thành công',
+        spreadsheetInfo
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `❌ Lỗi kết nối Google Sheets API: ${(error as Error).message}`
+      }
     }
   }
 
