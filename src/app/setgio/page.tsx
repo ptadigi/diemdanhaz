@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Clock, Settings, Save, AlertCircle, LogOut } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Clock, Settings, Save, AlertCircle, LogOut, Users, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import AuthGuard from '@/components/AuthGuard'
+import SessionManager from '@/components/SessionManager'
+import ClassStatsReport from '@/components/ClassStatsReport'
 
 interface TimeSettings {
   startHour: number
@@ -166,19 +169,21 @@ export default function SettingsPage() {
                 </Button>
               </div>
               <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                CÀI ĐẶT HỆ THỐNG
+                TRANG QUẢN LÝ
               </h1>
-              <p className="text-gray-600 text-base">Quản lý khung giờ điểm danh</p>
+              <p className="text-gray-600 text-base">Hệ thống điểm danh Học Lái Xe AZ</p>
             </motion.div>
 
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="w-5 h-5" />
-                  Trạng Thái Hiện Tại
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="space-y-6">
+              {/* Trạng thái hiện tại */}
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="w-5 h-5" />
+                    Trạng Thái Hiện Tại
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-2xl font-bold">
@@ -363,6 +368,13 @@ export default function SettingsPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Quản lý phiên điểm danh */}
+            <SessionManager />
+            
+            {/* Báo cáo thống kê theo khóa */}
+            <ClassStatsReport />
+            </div>
           </div>
         </div>
       </div>

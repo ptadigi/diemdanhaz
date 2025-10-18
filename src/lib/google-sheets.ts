@@ -298,6 +298,29 @@ export class GoogleSheetsService {
   }
 
   /**
+   * Kiểm tra xem học viên đã điểm danh chưa cho một ngày cụ thể
+   */
+  async checkAttendanceStatusForDate(studentInfo: StudentInfo, columnIndex: number): Promise<boolean> {
+    try {
+      const sheetName = studentInfo.khoa === 'K15' ? 'K15' : 'K16'
+      const rows = await this.getPublicSheetData(sheetName)
+      
+      if (studentInfo.row <= rows.length) {
+        const value = rows[studentInfo.row - 1]?.[columnIndex - 1] || ''
+        return value.toUpperCase() === 'TRUE' || 
+               value.toLowerCase() === 'có' ||
+               value.toLowerCase() === 'x' ||
+               (value.trim() !== '' && value.toUpperCase() !== 'FALSE')
+      }
+
+      return false
+    } catch (error) {
+      console.error('Error checking attendance status for date:', error)
+      return false
+    }
+  }
+
+  /**
    * Kiểm tra xem học viên đã điểm danh chưa
    */
   async checkAttendanceStatus(studentInfo: StudentInfo): Promise<boolean> {

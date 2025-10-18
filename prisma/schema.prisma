@@ -30,3 +30,41 @@ model Post {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model DiemDanhSession {
+  id          String   @id @default(cuid())
+  sessionCode String   @unique
+  title       String?
+  startTime   DateTime
+  endTime     DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  attendanceRecords DiemDanhRecord[]
+  
+  @@map("diemdanh_sessions")
+}
+
+model DiemDanhRecord {
+  id           String   @id @default(cuid())
+  sessionId    String
+  hoTen        String
+  cccd         String
+  soDienThoai  String
+  khoa         String
+  ngaySinh     String?
+  ghiChu       String?
+  isPresent    Boolean  @default(true)
+  diemDanhLuc  DateTime @default(now())
+  googleSheetRow String?
+  
+  // Relations
+  session DiemDanhSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("diemdanh_records")
+}

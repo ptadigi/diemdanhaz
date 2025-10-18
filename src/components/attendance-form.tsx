@@ -232,14 +232,28 @@ export default function AttendanceForm() {
       return
     }
 
-    if (attendanceCode !== sessionCode) {
-      toast.error('Mã điểm danh không chính xác! Vui lòng nhập lại.')
-      return
-    }
-
     setIsSubmitting(true)
 
     try {
+      // Kiểm tra session với database
+      const sessionResponse = await fetch('/api/session/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: attendanceCode
+        }),
+      })
+
+      const sessionData = await sessionResponse.json()
+
+      if (!sessionResponse.ok || !sessionData.valid) {
+        toast.error(sessionData.error || 'Mã điểm danh không hợp lệ hoặc đã hết hạn!')
+        return
+      }
+
+      // Nếu session hợp lệ, tiếp tục điểm danh
       const response = await fetch('/api/attendance/confirm', {
         method: 'POST',
         headers: {
@@ -248,7 +262,8 @@ export default function AttendanceForm() {
         body: JSON.stringify({
           studentInfo,
           code: attendanceCode,
-          formData
+          formData,
+          sessionId: sessionData.sessionId
         }),
       })
 
