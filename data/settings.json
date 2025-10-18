@@ -1,0 +1,7 @@
+{
+  "startHour": 10,
+  "startMinute": 23,
+  "endHour": 15,
+  "endMinute": 59,
+  "isActive": true
+}
