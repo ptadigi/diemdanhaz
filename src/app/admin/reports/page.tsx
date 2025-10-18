@@ -11,7 +11,10 @@ import {
   Download,
   ArrowLeft,
   Filter,
-  Eye
+  Eye,
+  Database,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,15 +55,45 @@ export default function ReportsPage() {
   const router = useRouter()
   const [reportData, setReportData] = useState<ReportData[]>([])
   const [studentAttendance, setStudentAttendance] = useState<StudentAttendance[]>([])
+  const [khoaList, setKhoaList] = useState<string[]>(['K15', 'K16', 'K17']) // Default values
   const [selectedKhoa, setSelectedKhoa] = useState<string>('all')
   const [selectedPeriod, setSelectedPeriod] = useState<string>('7days')
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingKhoa, setIsLoadingKhoa] = useState(false)
+  const [googleSheetsConnected, setGoogleSheetsConnected] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'students'>('overview')
 
   useEffect(() => {
     checkAuth()
+    fetchKhoaList()
+    fetchReportData()
+  }, [])
+
+  useEffect(() => {
     fetchReportData()
   }, [selectedKhoa, selectedPeriod])
+
+  const fetchKhoaList = async () => {
+    setIsLoadingKhoa(true)
+    try {
+      const response = await fetch('/api/admin/khoa')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.khoaList.length > 0) {
+          setKhoaList(data.khoaList)
+          setGoogleSheetsConnected(true)
+        }
+      } else {
+        console.log('Using default khoa list')
+        setGoogleSheetsConnected(false)
+      }
+    } catch (error) {
+      console.log('Failed to fetch khoa list, using defaults:', error)
+      setGoogleSheetsConnected(false)
+    } finally {
+      setIsLoadingKhoa(false)
+    }
+  }
 
   const checkAuth = async () => {
     try {
@@ -178,6 +211,35 @@ export default function ReportsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Google Sheets Connection Status */}
+        {googleSheetsConnected !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <Alert className={googleSheetsConnected ? "border-green-200 bg-green-50" : "border-yellow-200 bg-yellow-50"}>
+              <div className="flex items-center gap-2">
+                {googleSheetsConnected ? (
+                  <>
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      ✅ Đã kết nối Google Sheets - Đang sử dụng dữ liệu thật từ {khoaList.length} khóa học
+                    </AlertDescription>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                    <AlertDescription className="text-yellow-800">
+                      ⚠️ Không thể kết nối Google Sheets - Đang sử dụng dữ liệu mẫu
+                    </AlertDescription>
+                  </>
+                )}
+              </div>
+            </Alert>
+          </motion.div>
+        )}
+
         {/* Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -201,9 +263,11 @@ export default function ReportsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Tất cả các khóa</SelectItem>
-                      <SelectItem value="K15">K15</SelectItem>
-                      <SelectItem value="K16">K16</SelectItem>
-                      <SelectItem value="K17">K17</SelectItem>
+                      {khoaList.map((khoa) => (
+                        <SelectItem key={khoa} value={khoa}>
+                          {khoa}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
